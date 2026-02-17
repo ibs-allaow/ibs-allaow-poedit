@@ -254,6 +254,7 @@ class PoeditFrame : public PoeditFrameBase
 
         // Message handlers:
         void OnTranslationFromThisPot(wxCommandEvent& event);
+        void OnCopyAllScripts(wxCommandEvent& event);
 #ifndef __WXOSX__
         void OnCloseCmd(wxCommandEvent& event);
 #endif
