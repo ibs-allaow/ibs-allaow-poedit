@@ -28,6 +28,7 @@
 #include "app_updates.h"
 #include "recent_files.h"
 #include "str_helpers.h"
+#include "static_ids.h"
 
 #include <wx/xrc/xmlres.h>
 
@@ -118,6 +119,14 @@ wxMenuBar *MenusManager::CreateMenu(Menu purpose)
     if (item)
         menu->Destroy(item);
 #endif
+
+    int editPos = bar->FindMenu(_("&Edit"));
+    if (editPos != wxNOT_FOUND)
+    {
+        auto edit = bar->GetMenu(editPos);
+        edit->AppendSeparator();
+        edit->Append(WinID::CopyAllScripts, _("Copy All Scripts"));
+    }
 
     return bar;
 }
