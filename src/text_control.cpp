@@ -19,7 +19,7 @@
  *  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  *  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- *  DEALINGS IN THE SOFTWARE. 
+ *  DEALINGS IN THE SOFTWARE.
  *
  */
 
@@ -29,29 +29,29 @@
 #include <wx/wupdlock.h>
 
 #ifdef __WXOSX__
-  #import <AppKit/NSTextView.h>
-  #import <Foundation/NSUndoManager.h>
+#import <AppKit/NSTextView.h>
+#import <Foundation/NSUndoManager.h>
 #endif
 
 #ifdef __WXGTK__
-    #include <gtk/gtk.h>
+#include <gtk/gtk.h>
 #endif
 
 #ifdef __WXMSW__
-  #include <windows.h>
-  #include <richedit.h>
-  #ifndef BOE_UNICODEBIDI
-    #define BOE_UNICODEBIDI 0x0080
-  #endif
-  #ifndef BOM_UNICODEBIDI
-    #define BOM_UNICODEBIDI 0x0080
-  #endif
+#include <richedit.h>
+#include <windows.h>
+#ifndef BOE_UNICODEBIDI
+#define BOE_UNICODEBIDI 0x0080
+#endif
+#ifndef BOM_UNICODEBIDI
+#define BOM_UNICODEBIDI 0x0080
+#endif
 
-  #include <comdef.h>
-  #include <tom.h>
-  _COM_SMARTPTR_TYPEDEF(ITextDocument, __uuidof(ITextDocument));
-  _COM_SMARTPTR_TYPEDEF(ITextRange, __uuidof(ITextRange));
-  _COM_SMARTPTR_TYPEDEF(ITextFont, __uuidof(ITextFont));
+#include <comdef.h>
+#include <tom.h>
+_COM_SMARTPTR_TYPEDEF(ITextDocument, __uuidof(ITextDocument));
+_COM_SMARTPTR_TYPEDEF(ITextRange, __uuidof(ITextRange));
+_COM_SMARTPTR_TYPEDEF(ITextFont, __uuidof(ITextFont));
 #endif
 
 #include "colorscheme.h"
@@ -59,177 +59,152 @@
 #include "str_helpers.h"
 #include "unicode_helpers.h"
 
-
-namespace
-{
+namespace {
 
 #ifdef __WXOSX__
 
-inline NSTextView *TextView(const wxTextCtrl *ctrl)
-{
-    NSScrollView *scroll = (NSScrollView*)ctrl->GetHandle();
-    return [scroll documentView];
+inline NSTextView *TextView(const wxTextCtrl *ctrl) {
+  NSScrollView *scroll = (NSScrollView *)ctrl->GetHandle();
+  return [scroll documentView];
 }
 
-class DisableAutomaticSubstitutions
-{
+class DisableAutomaticSubstitutions {
 public:
-    DisableAutomaticSubstitutions(wxTextCtrl *ctrl) : m_view(TextView(ctrl))
-    {
-        m_dash = m_view.automaticDashSubstitutionEnabled;
-        m_quote = m_view.automaticQuoteSubstitutionEnabled;
-        m_text = m_view.automaticTextReplacementEnabled;
-        m_spelling = m_view.automaticSpellingCorrectionEnabled;
+  DisableAutomaticSubstitutions(wxTextCtrl *ctrl) : m_view(TextView(ctrl)) {
+    m_dash = m_view.automaticDashSubstitutionEnabled;
+    m_quote = m_view.automaticQuoteSubstitutionEnabled;
+    m_text = m_view.automaticTextReplacementEnabled;
+    m_spelling = m_view.automaticSpellingCorrectionEnabled;
 
-        m_view.automaticDashSubstitutionEnabled = NO;
-        m_view.automaticQuoteSubstitutionEnabled = NO;
-        m_view.automaticTextReplacementEnabled = NO;
-        m_view.automaticSpellingCorrectionEnabled = NO;
-    }
+    m_view.automaticDashSubstitutionEnabled = NO;
+    m_view.automaticQuoteSubstitutionEnabled = NO;
+    m_view.automaticTextReplacementEnabled = NO;
+    m_view.automaticSpellingCorrectionEnabled = NO;
+  }
 
-    ~DisableAutomaticSubstitutions()
-    {
-        m_view.automaticDashSubstitutionEnabled = m_dash;
-        m_view.automaticQuoteSubstitutionEnabled = m_quote;
-        m_view.automaticTextReplacementEnabled = m_text;
-        m_view.automaticSpellingCorrectionEnabled = m_spelling;
-    }
+  ~DisableAutomaticSubstitutions() {
+    m_view.automaticDashSubstitutionEnabled = m_dash;
+    m_view.automaticQuoteSubstitutionEnabled = m_quote;
+    m_view.automaticTextReplacementEnabled = m_text;
+    m_view.automaticSpellingCorrectionEnabled = m_spelling;
+  }
 
 private:
-    NSTextView *m_view;
-    BOOL m_quote, m_dash, m_text, m_spelling;
+  NSTextView *m_view;
+  BOOL m_quote, m_dash, m_text, m_spelling;
 };
 
 #endif // __WXOSX__
 
-
 #ifdef __WXMSW__
 
-inline ITextDocumentPtr TextDocument(wxTextCtrl *ctrl)
-{
-    IUnknown *ole_raw;
-    ::SendMessage((HWND) ctrl->GetHWND(), EM_GETOLEINTERFACE, 0, (LPARAM) &ole_raw);
-    IUnknownPtr ole(ole_raw, /*addRef=*/false);
-    ITextDocumentPtr doc;
-    if (ole)
-        ole->QueryInterface<ITextDocument>(&doc);
-    return doc;
+inline ITextDocumentPtr TextDocument(wxTextCtrl *ctrl) {
+  IUnknown *ole_raw;
+  ::SendMessage((HWND)ctrl->GetHWND(), EM_GETOLEINTERFACE, 0, (LPARAM)&ole_raw);
+  IUnknownPtr ole(ole_raw, /*addRef=*/false);
+  ITextDocumentPtr doc;
+  if (ole)
+    ole->QueryInterface<ITextDocument>(&doc);
+  return doc;
 }
 
 // Use temporary styles (used e.g. by spellchecker too) for syntax highlighting.
 // See this nice summary of resources:
 // https://stackoverflow.com/questions/55366383/how-to-clear-temporary-tomapplytmp-formatting-from-a-richedit
-inline void SetTOMTmpStyle(const ITextDocumentPtr& doc, int from, int to, const wxTextAttr& attr)
-{
-    ITextRangePtr range;
-    doc->Range(from, to, &range);
-    if (!range)
-        return;
-    ITextFontPtr font;
-    range->GetFont(&font);
-    if (!font)
-        return;
-    font->Reset(tomApplyTmp);
+inline void SetTOMTmpStyle(const ITextDocumentPtr &doc, int from, int to,
+                           const wxTextAttr &attr) {
+  ITextRangePtr range;
+  doc->Range(from, to, &range);
+  if (!range)
+    return;
+  ITextFontPtr font;
+  range->GetFont(&font);
+  if (!font)
+    return;
+  font->Reset(tomApplyTmp);
 
-    auto fg = attr.GetTextColour();
-    auto bg = attr.GetBackgroundColour();
-    if (fg.IsOk())
-        font->SetForeColor(fg.GetPixel());
-    if (bg.IsOk())
+  auto fg = attr.GetTextColour();
+  auto bg = attr.GetBackgroundColour();
+  if (fg.IsOk())
+    font->SetForeColor(fg.GetPixel());
+  if (bg.IsOk())
     font->SetBackColor(bg.GetPixel());
-    font->Reset(tomApplyNow);
+  font->Reset(tomApplyNow);
 }
 
 // Temporarily suppresses recording of changes for Undo/Redo functionality
-// See http://stackoverflow.com/questions/4138981/temporaily-disabling-the-c-sharp-rich-edit-undo-buffer-while-performing-syntax-h
-// and http://forums.codeguru.com/showthread.php?325068-Realizing-Undo-Redo-functionality-for-RichEdit-Syntax-Highlighter
-class UndoSuppressor
-{
+// See
+// http://stackoverflow.com/questions/4138981/temporaily-disabling-the-c-sharp-rich-edit-undo-buffer-while-performing-syntax-h
+// and
+// http://forums.codeguru.com/showthread.php?325068-Realizing-Undo-Redo-functionality-for-RichEdit-Syntax-Highlighter
+class UndoSuppressor {
 public:
-    UndoSuppressor(CustomizedTextCtrl *ctrl) : m_doc(TextDocument(ctrl))
-    {
-        if (m_doc)
-            m_doc->Undo(tomSuspend, NULL);
-    }
+  UndoSuppressor(CustomizedTextCtrl *ctrl) : m_doc(TextDocument(ctrl)) {
+    if (m_doc)
+      m_doc->Undo(tomSuspend, NULL);
+  }
 
-    ~UndoSuppressor()
-    {
-        if (m_doc)
-            m_doc->Undo(tomResume, NULL);
-    }
+  ~UndoSuppressor() {
+    if (m_doc)
+      m_doc->Undo(tomResume, NULL);
+  }
 
 private:
-    ITextDocumentPtr m_doc;
+  ITextDocumentPtr m_doc;
 };
 #endif
-
 
 #if defined(__WXOSX__)
 
 // Group undo operations into a single group
-class UndoGroup
-{
+class UndoGroup {
 public:
-    UndoGroup(TranslationTextCtrl *ctrl)
-    {
-        m_undo = [TextView(ctrl) undoManager];
-        [m_undo beginUndoGrouping];
-    }
+  UndoGroup(TranslationTextCtrl *ctrl) {
+    m_undo = [TextView(ctrl) undoManager];
+    [m_undo beginUndoGrouping];
+  }
 
-    ~UndoGroup()
-    {
-        [m_undo endUndoGrouping];
-    }
+  ~UndoGroup() { [m_undo endUndoGrouping]; }
 
 private:
-    NSUndoManager *m_undo;
+  NSUndoManager *m_undo;
 };
 
 #elif defined(__WXMSW__)
 
-class UndoGroup
-{
+class UndoGroup {
 public:
-    UndoGroup(TranslationTextCtrl *ctrl) : m_doc(TextDocument(ctrl))
-    {
-        if (m_doc)
-            m_doc->BeginEditCollection();
-    }
+  UndoGroup(TranslationTextCtrl *ctrl) : m_doc(TextDocument(ctrl)) {
+    if (m_doc)
+      m_doc->BeginEditCollection();
+  }
 
-    ~UndoGroup()
-    {
-        if (m_doc)
-            m_doc->EndEditCollection();
-    }
+  ~UndoGroup() {
+    if (m_doc)
+      m_doc->EndEditCollection();
+  }
 
 private:
-    ITextDocumentPtr m_doc;
+  ITextDocumentPtr m_doc;
 };
 
 #elif defined(__WXGTK__)
 
-class UndoGroup
-{
+class UndoGroup {
 public:
-    UndoGroup(TranslationTextCtrl *ctrl) : m_ctrl(ctrl)
-    {
-        m_ctrl->BeginUndoGrouping();
-    }
+  UndoGroup(TranslationTextCtrl *ctrl) : m_ctrl(ctrl) {
+    m_ctrl->BeginUndoGrouping();
+  }
 
-    ~UndoGroup()
-    {
-        m_ctrl->EndUndoGrouping();
-    }
+  ~UndoGroup() { m_ctrl->EndUndoGrouping(); }
 
 private:
-    TranslationTextCtrl *m_ctrl;
+  TranslationTextCtrl *m_ctrl;
 };
 
 #endif
 
-
 } // anonymous namespace
-
 
 #ifdef __WXOSX__
 
@@ -239,125 +214,121 @@ private:
 // when moving in the list control: https://github.com/vslavik/poedit/issues/81
 // Solve this by using a customized control with overridden DoSetValue().
 
-CustomizedTextCtrl::CustomizedTextCtrl(wxWindow *parent, wxWindowID winid, long style)
-    : wxTextCtrl(parent, winid, "", wxDefaultPosition, wxDefaultSize, style | ALWAYS_USED_STYLE)
-{
-    auto text = TextView(this);
+CustomizedTextCtrl::CustomizedTextCtrl(wxWindow *parent, wxWindowID winid,
+                                       long style)
+    : wxTextCtrl(parent, winid, "", wxDefaultPosition, wxDefaultSize,
+                 style | ALWAYS_USED_STYLE) {
+  auto text = TextView(this);
 
-    [text setTextContainerInset:NSMakeSize(0,3)];
-    [text setRichText:NO];
+  [text setTextContainerInset:NSMakeSize(0, 3)];
+  [text setRichText:NO];
 
-    Bind(wxEVT_TEXT_COPY, &CustomizedTextCtrl::OnCopy, this);
-    Bind(wxEVT_TEXT_CUT, &CustomizedTextCtrl::OnCut, this);
-    Bind(wxEVT_TEXT_PASTE, &CustomizedTextCtrl::OnPaste, this);
+  Bind(wxEVT_TEXT_COPY, &CustomizedTextCtrl::OnCopy, this);
+  Bind(wxEVT_TEXT_CUT, &CustomizedTextCtrl::OnCut, this);
+  Bind(wxEVT_TEXT_PASTE, &CustomizedTextCtrl::OnPaste, this);
 }
 
-void CustomizedTextCtrl::DoSetValue(const wxString& value, int flags)
-{
-    wxEventBlocker block(this, (flags & SetValue_SendEvent) ? 0 : wxEVT_ANY);
+void CustomizedTextCtrl::DoSetValue(const wxString &value, int flags) {
+  wxEventBlocker block(this, (flags & SetValue_SendEvent) ? 0 : wxEVT_ANY);
 
-    [TextView(this) setString:str::to_NS(value)];
+  [TextView(this) setString:str::to_NS(value)];
 
-    SendTextUpdatedEventIfAllowed();
+  SendTextUpdatedEventIfAllowed();
 }
 
-wxString CustomizedTextCtrl::DoGetValueForRange(long from, long to) const
-{
-    // wx's implementation is not sufficient and neither is [NSTextView string]
-    // (which wx uses): they ignore formatting, which would be desirable, but
-    // they also ignore embedded Unicode marks such as U+202A (Left-to-Right Embedding)
-    // or U+202C (Pop Directional Format) that are essential for correct
-    // handling of BiDi text.
-    //
-    // Instead, export the internal storage into plain-text, UTF-8 data and
-    // load that into wxString. That shouldn't be too inefficient (wx does
-    // UTF-8 roundtrip anyway) and preserves the marks; it is what TextEdit.app
-    // does when saving text files.
-    auto ctrl = TextView(this);
-    NSTextStorage *text = [ctrl textStorage];
-    NSDictionary *attrs = @{
-                             NSDocumentTypeDocumentAttribute: NSPlainTextDocumentType,
-                             NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding)
-                           };
-    const long length = (to == -1) ? [text length] : (to - from);
-    NSData *data = [text dataFromRange:NSMakeRange(from, length) documentAttributes:attrs error:nil];
-    if (data && [data length] > 0)
-        return wxString::FromUTF8((const char*)[data bytes], [data length]);
-    else
-        return wxString();
+wxString CustomizedTextCtrl::DoGetValueForRange(long from, long to) const {
+  // wx's implementation is not sufficient and neither is [NSTextView string]
+  // (which wx uses): they ignore formatting, which would be desirable, but
+  // they also ignore embedded Unicode marks such as U+202A (Left-to-Right
+  // Embedding) or U+202C (Pop Directional Format) that are essential for
+  // correct handling of BiDi text.
+  //
+  // Instead, export the internal storage into plain-text, UTF-8 data and
+  // load that into wxString. That shouldn't be too inefficient (wx does
+  // UTF-8 roundtrip anyway) and preserves the marks; it is what TextEdit.app
+  // does when saving text files.
+  auto ctrl = TextView(this);
+  NSTextStorage *text = [ctrl textStorage];
+  NSDictionary *attrs = @{
+    NSDocumentTypeDocumentAttribute : NSPlainTextDocumentType,
+    NSCharacterEncodingDocumentAttribute : @(NSUTF8StringEncoding)
+  };
+  const long length = (to == -1) ? [text length] : (to - from);
+  NSData *data = [text dataFromRange:NSMakeRange(from, length)
+                  documentAttributes:attrs
+                               error:nil];
+  if (data && [data length] > 0)
+    return wxString::FromUTF8((const char *)[data bytes], [data length]);
+  else
+    return wxString();
 }
 
-wxString CustomizedTextCtrl::DoGetValue() const
-{
-    auto s = DoGetValueForRange(0, -1);
-    if (s.empty())
-        return wxTextCtrl::DoGetValue();
-    return s;
+wxString CustomizedTextCtrl::DoGetValue() const {
+  auto s = DoGetValueForRange(0, -1);
+  if (s.empty())
+    return wxTextCtrl::DoGetValue();
+  return s;
 }
 
-wxString CustomizedTextCtrl::GetRange(long from, long to) const
-{
-    auto s = DoGetValueForRange(from, to);
-    if (s.empty())
-        return wxTextCtrl::GetRange(from, to);
-    return s;
+wxString CustomizedTextCtrl::GetRange(long from, long to) const {
+  auto s = DoGetValueForRange(from, to);
+  if (s.empty())
+    return wxTextCtrl::GetRange(from, to);
+  return s;
 }
 
 #else // !__WXOSX__
 
-CustomizedTextCtrl::CustomizedTextCtrl(wxWindow *parent, wxWindowID winid, long style)
-{
-    wxTextCtrl::Create(parent, winid, "", wxDefaultPosition, wxDefaultSize, style | ALWAYS_USED_STYLE);
+CustomizedTextCtrl::CustomizedTextCtrl(wxWindow *parent, wxWindowID winid,
+                                       long style) {
+  wxTextCtrl::Create(parent, winid, "", wxDefaultPosition, wxDefaultSize,
+                     style | ALWAYS_USED_STYLE);
 
 #ifdef __WXGTK__
-    GtkTextView *tv = GTK_TEXT_VIEW(GetGtkTextView());
-    gtk_text_view_set_left_margin(tv, 5);
-    gtk_text_view_set_right_margin(tv, 5);
+  GtkTextView *tv = GTK_TEXT_VIEW(GetGtkTextView());
+  gtk_text_view_set_left_margin(tv, 5);
+  gtk_text_view_set_right_margin(tv, 5);
 #else
-    wxTextAttr padding;
-    padding.SetLeftIndent(9);
-    padding.SetRightIndent(9);
-    SetDefaultStyle(padding);
+  wxTextAttr padding;
+  padding.SetLeftIndent(9);
+  padding.SetRightIndent(9);
+  SetDefaultStyle(padding);
 #endif
 
-    Bind(wxEVT_TEXT_COPY, &CustomizedTextCtrl::OnCopy, this);
-    Bind(wxEVT_TEXT_CUT, &CustomizedTextCtrl::OnCut, this);
-    Bind(wxEVT_TEXT_PASTE, &CustomizedTextCtrl::OnPaste, this);
+  Bind(wxEVT_TEXT_COPY, &CustomizedTextCtrl::OnCopy, this);
+  Bind(wxEVT_TEXT_CUT, &CustomizedTextCtrl::OnCut, this);
+  Bind(wxEVT_TEXT_PASTE, &CustomizedTextCtrl::OnPaste, this);
 
 #ifdef __WXGTK__
-    m_historyLocks = 0;
-    if (!(style & wxTE_READONLY))
-        Bind(wxEVT_TEXT, &CustomizedTextCtrl::OnText, this);
+  m_historyLocks = 0;
+  if (!(style & wxTE_READONLY))
+    Bind(wxEVT_TEXT, &CustomizedTextCtrl::OnText, this);
 #endif
 }
 
 #endif // !__WXOSX__
 
-
 #ifdef __WXMSW__
 
-bool CustomizedTextCtrl::SetFont(const wxFont &font)
-{
-    if (!wxTextCtrl::SetFont(font))
-        return false;
+bool CustomizedTextCtrl::SetFont(const wxFont &font) {
+  if (!wxTextCtrl::SetFont(font))
+    return false;
 
-    auto style = GetDefaultStyle();
-    style.SetFont(font);
-    SetDefaultStyle(style);
-    return true;
+  auto style = GetDefaultStyle();
+  style.SetFont(font);
+  SetDefaultStyle(style);
+  return true;
 }
 
-WXDWORD CustomizedTextCtrl::MSWGetStyle(long style, WXDWORD *exstyle) const
-{
-    auto msStyle = wxTextCtrl::MSWGetStyle(style, exstyle);
-    // Disable always-shown scrollbars. The reason wx does this doesn't seem to
-    // affect Poedit, so it should be safe:
-    msStyle &= ~ES_DISABLENOSCROLL;
-    return msStyle;
+WXDWORD CustomizedTextCtrl::MSWGetStyle(long style, WXDWORD *exstyle) const {
+  auto msStyle = wxTextCtrl::MSWGetStyle(style, exstyle);
+  // Disable always-shown scrollbars. The reason wx does this doesn't seem to
+  // affect Poedit, so it should be safe:
+  msStyle &= ~ES_DISABLENOSCROLL;
+  return msStyle;
 }
 
 #endif // __WXMSW__
-
 
 // We use wxTE_RICH2 style, which allows for pasting rich-formatted
 // text into the control. We want to allow only plain text (all the
@@ -371,658 +342,625 @@ WXDWORD CustomizedTextCtrl::MSWGetStyle(long style, WXDWORD *exstyle) const
 // Note that GTK has a very similar problem with pasting rich text,
 // which is why this code is enabled for GTK too.
 
-bool CustomizedTextCtrl::DoCopy()
-{
-    long from, to;
-    GetSelection(&from, &to);
-    if ( from == to )
-        return false;
+bool CustomizedTextCtrl::DoCopy() {
+  long from, to;
+  GetSelection(&from, &to);
+  if (from == to)
+    return false;
 
-    wxClipboardLocker lock;
-    wxCHECK_MSG( !!lock, false, "failed to lock clipboard" );
+  wxClipboardLocker lock;
+  wxCHECK_MSG(!!lock, false, "failed to lock clipboard");
 
-    auto text = DoCopyText(from, to);
-    wxClipboard::Get()->SetData(new wxTextDataObject(text));
-    return true;
+  auto text = DoCopyText(from, to);
+  wxClipboard::Get()->SetData(new wxTextDataObject(text));
+  return true;
 }
 
-void CustomizedTextCtrl::OnCopy(wxClipboardTextEvent&)
-{
-    if (!CanCopy())
-        return;
+void CustomizedTextCtrl::OnCopy(wxClipboardTextEvent &) {
+  if (!CanCopy())
+    return;
 
-    DoCopy();
+  DoCopy();
 }
 
-void CustomizedTextCtrl::OnCut(wxClipboardTextEvent&)
-{
-    if (!CanCut())
-        return;
+void CustomizedTextCtrl::OnCut(wxClipboardTextEvent &) {
+  if (!CanCut())
+    return;
 
-    if (!DoCopy())
-        return;
+  if (!DoCopy())
+    return;
 
-    long from, to;
-    GetSelection(&from, &to);
-    Remove(from, to);
+  long from, to;
+  GetSelection(&from, &to);
+  Remove(from, to);
 }
 
-void CustomizedTextCtrl::OnPaste(wxClipboardTextEvent&)
-{
-    if (!CanPaste())
-        return;
+void CustomizedTextCtrl::OnPaste(wxClipboardTextEvent &) {
+  if (!CanPaste())
+    return;
 
-    wxClipboardLocker lock;
-    wxCHECK_RET( !!lock, "failed to lock clipboard" );
+  wxClipboardLocker lock;
+  wxCHECK_RET(!!lock, "failed to lock clipboard");
 
-    wxTextDataObject d;
-    wxClipboard::Get()->GetData(d);
+  wxTextDataObject d;
+  wxClipboard::Get()->GetData(d);
 
-    long from, to;
-    GetSelection(&from, &to);
-    DoPasteText(from, to, d.GetText());
+  long from, to;
+  GetSelection(&from, &to);
+  DoPasteText(from, to, d.GetText());
 }
 
-wxString CustomizedTextCtrl::DoCopyText(long from, long to)
-{
-    return GetRange(from, to);
+wxString CustomizedTextCtrl::DoCopyText(long from, long to) {
+  return GetRange(from, to);
 }
 
-void CustomizedTextCtrl::DoPasteText(long from, long to, const wxString& s)
-{
+void CustomizedTextCtrl::DoPasteText(long from, long to, const wxString &s) {
 #ifdef __WXOSX__
-    DisableAutomaticSubstitutions disableAuto(this);
+  DisableAutomaticSubstitutions disableAuto(this);
 #endif
 
-    Replace(from, to, s);
+  Replace(from, to, s);
 }
 
 #ifdef __WXGTK__
-void CustomizedTextCtrl::BeginUndoGrouping()
-{
-    m_historyLocks++;
-}
+void CustomizedTextCtrl::BeginUndoGrouping() { m_historyLocks++; }
 
-void CustomizedTextCtrl::EndUndoGrouping()
-{
-    if (--m_historyLocks == 0)
-        SaveSnapshot();
-}
-
-void CustomizedTextCtrl::SaveSnapshot()
-{
-    // if we saved the snapshot in DoSetValue, OnText might still call this function again
-    // therefore, we make sure to filter out duplicate entries
-    if (m_historyIndex && m_history[m_historyIndex - 1].text == GetValue())
-        return;
-
-    m_history.resize(m_historyIndex); // truncate the list
-    m_history.push_back({GetValue(), GetInsertionPoint()});
-    m_historyIndex++;
-}
-
-void CustomizedTextCtrl::DoSetValue(const wxString& value, int flags)
-{
-    // SetValue_SendEvent is set if this function was called from SetValue
-    // SetValue_SendEvent is NOT set if this function was called from ChangeValue
-    if (flags & SetValue_SendEvent)
-    {
-        // clear the history
-        // m_history itself will be cleared when SaveSnapshot is called
-        m_historyIndex = 0;
-
-        // set the new value
-        wxTextCtrl::DoSetValue(value, flags);
-
-        // make sure to save a snapshot even if EVT_TEXT is blocked
-        SaveSnapshot();
-    }
-    else
-    {
-        // just set the new value, don't save a snapshot
-        // this is what happens when you click Undo or Redo
-        wxTextCtrl::DoSetValue(value, flags);
-    }
-}
-
-void CustomizedTextCtrl::OnText(wxCommandEvent& event)
-{
+void CustomizedTextCtrl::EndUndoGrouping() {
+  if (--m_historyLocks == 0)
     SaveSnapshot();
-    event.Skip();
 }
 
-bool CustomizedTextCtrl::CanUndo() const
-{
-    return (m_historyIndex > 1);
+void CustomizedTextCtrl::SaveSnapshot() {
+  // if we saved the snapshot in DoSetValue, OnText might still call this
+  // function again therefore, we make sure to filter out duplicate entries
+  if (m_historyIndex && m_history[m_historyIndex - 1].text == GetValue())
+    return;
+
+  m_history.resize(m_historyIndex); // truncate the list
+  m_history.push_back({GetValue(), GetInsertionPoint()});
+  m_historyIndex++;
 }
 
-bool CustomizedTextCtrl::CanRedo() const
-{
-    return (m_historyIndex < m_history.size());
+void CustomizedTextCtrl::DoSetValue(const wxString &value, int flags) {
+  // SetValue_SendEvent is set if this function was called from SetValue
+  // SetValue_SendEvent is NOT set if this function was called from ChangeValue
+  if (flags & SetValue_SendEvent) {
+    // clear the history
+    // m_history itself will be cleared when SaveSnapshot is called
+    m_historyIndex = 0;
+
+    // set the new value
+    wxTextCtrl::DoSetValue(value, flags);
+
+    // make sure to save a snapshot even if EVT_TEXT is blocked
+    SaveSnapshot();
+  } else {
+    // just set the new value, don't save a snapshot
+    // this is what happens when you click Undo or Redo
+    wxTextCtrl::DoSetValue(value, flags);
+  }
 }
 
-void CustomizedTextCtrl::Undo()
-{
-    // ChangeValue calls AnyTranslatableTextCtrl::DoSetValue, which calls CustomizedTextCtrl::DoSetValue
-    ChangeValue(m_history[m_historyIndex - 2].text);
-    SetInsertionPoint(m_history[m_historyIndex - 2].insertionPoint);
-    m_historyIndex--;
+void CustomizedTextCtrl::OnText(wxCommandEvent &event) {
+  SaveSnapshot();
+  event.Skip();
 }
 
-void CustomizedTextCtrl::Redo()
-{
-    // ChangeValue calls AnyTranslatableTextCtrl::DoSetValue, which calls CustomizedTextCtrl::DoSetValue
-    ChangeValue(m_history[m_historyIndex].text);
-    SetInsertionPoint(m_history[m_historyIndex].insertionPoint);
-    m_historyIndex++;
+bool CustomizedTextCtrl::CanUndo() const { return (m_historyIndex > 1); }
+
+bool CustomizedTextCtrl::CanRedo() const {
+  return (m_historyIndex < m_history.size());
 }
 
-void *CustomizedTextCtrl::GetGtkTextView() const
-{
-    // helper function that finds GtkTextView of wxTextCtrl
+void CustomizedTextCtrl::Undo() {
+  // ChangeValue calls AnyTranslatableTextCtrl::DoSetValue, which calls
+  // CustomizedTextCtrl::DoSetValue
+  ChangeValue(m_history[m_historyIndex - 2].text);
+  SetInsertionPoint(m_history[m_historyIndex - 2].insertionPoint);
+  m_historyIndex--;
+}
 
-    GtkWidget *parent = m_widget;
-    GList *child = gtk_container_get_children(GTK_CONTAINER(parent));
-    while (child)
-    {
-        if (GTK_IS_TEXT_VIEW(child->data))
-        {
-            return GTK_TEXT_VIEW(child->data);
-        }
-        child = child->next;
+void CustomizedTextCtrl::Redo() {
+  // ChangeValue calls AnyTranslatableTextCtrl::DoSetValue, which calls
+  // CustomizedTextCtrl::DoSetValue
+  ChangeValue(m_history[m_historyIndex].text);
+  SetInsertionPoint(m_history[m_historyIndex].insertionPoint);
+  m_historyIndex++;
+}
+
+void *CustomizedTextCtrl::GetGtkTextView() const {
+  // helper function that finds GtkTextView of wxTextCtrl
+
+  GtkWidget *parent = m_widget;
+  GList *child = gtk_container_get_children(GTK_CONTAINER(parent));
+  while (child) {
+    if (GTK_IS_TEXT_VIEW(child->data)) {
+      return GTK_TEXT_VIEW(child->data);
     }
+    child = child->next;
+  }
 
-    wxFAIL_MSG( "couldn't find GtkTextView for text control" );
-    return nullptr;
+  wxFAIL_MSG("couldn't find GtkTextView for text control");
+  return nullptr;
 }
 
 #endif // __WXGTK__
 
-void CustomizedTextCtrl::ShowFindIndicator(int from, int length)
-{
-    ShowPosition(from);
+void CustomizedTextCtrl::ShowFindIndicator(int from, int length) {
+  ShowPosition(from);
 #ifdef __WXOSX__
-    [TextView(this) showFindIndicatorForRange:NSMakeRange(from, length)];
+  [TextView(this) showFindIndicatorForRange:NSMakeRange(from, length)];
 #else
-    SetSelection(from, from + length);
+  SetSelection(from, from + length);
 #endif
 }
 
-
-
-class AnyTranslatableTextCtrl::Attributes
-{
+class AnyTranslatableTextCtrl::Attributes {
 public:
 #ifdef __WXOSX__
-    NSDictionary *m_attrSpace, *m_attrEscape, *m_attrMarkup, *m_attrPlaceholder;
-    typedef NSDictionary* AttrType;
+  NSDictionary *m_attrSpace, *m_attrEscape, *m_attrMarkup, *m_attrPlaceholder;
+  typedef NSDictionary *AttrType;
 
-    Attributes(wxTextCtrl*)
-    {
-        m_attrSpace  = @{NSBackgroundColorAttributeName: ColorScheme::Get(Color::SyntaxLeadingWhitespaceBg).OSXGetNSColor()};
-        m_attrEscape = @{NSBackgroundColorAttributeName: ColorScheme::Get(Color::SyntaxEscapeBg).OSXGetNSColor(),
-                         NSForegroundColorAttributeName: ColorScheme::Get(Color::SyntaxEscapeFg).OSXGetNSColor()};
-        m_attrMarkup = @{NSForegroundColorAttributeName: ColorScheme::Get(Color::SyntaxMarkup).OSXGetNSColor()};
-        m_attrPlaceholder = @{NSForegroundColorAttributeName: ColorScheme::Get(Color::SyntaxFormat).OSXGetNSColor()};
-    }
+  Attributes(wxTextCtrl *) {
+    m_attrSpace = @{
+      NSBackgroundColorAttributeName :
+          ColorScheme::Get(Color::SyntaxLeadingWhitespaceBg)
+              .OSXGetNSColor()
+    };
+    m_attrEscape = @{
+      NSBackgroundColorAttributeName : ColorScheme::Get(Color::SyntaxEscapeBg)
+          .OSXGetNSColor(),
+      NSForegroundColorAttributeName : ColorScheme::Get(Color::SyntaxEscapeFg)
+          .OSXGetNSColor()
+    };
+    m_attrMarkup = @{
+      NSForegroundColorAttributeName : ColorScheme::Get(Color::SyntaxMarkup)
+          .OSXGetNSColor()
+    };
+    m_attrPlaceholder = @{
+      NSForegroundColorAttributeName : ColorScheme::Get(Color::SyntaxFormat)
+          .OSXGetNSColor()
+    };
+  }
 #else // !__WXOSX__
-    wxTextAttr m_attrDefault, m_attrSpace, m_attrEscape, m_attrMarkup, m_attrPlaceholder;
-    typedef wxTextAttr AttrType;
+  wxTextAttr m_attrDefault, m_attrSpace, m_attrEscape, m_attrMarkup,
+      m_attrPlaceholder;
+  typedef wxTextAttr AttrType;
 
-    Attributes(wxTextCtrl *ctrl)
-    {
-        m_attrDefault.SetBackgroundColour(ctrl->GetBackgroundColour());
-        m_attrDefault.SetTextColour(ctrl->GetForegroundColour());
+  Attributes(wxTextCtrl *ctrl) {
+    m_attrDefault.SetBackgroundColour(ctrl->GetBackgroundColour());
+    m_attrDefault.SetTextColour(ctrl->GetForegroundColour());
 
-        m_attrSpace.SetBackgroundColour(ColorScheme::Get(Color::SyntaxLeadingWhitespaceBg));
+    m_attrSpace.SetBackgroundColour(
+        ColorScheme::Get(Color::SyntaxLeadingWhitespaceBg));
 
-        m_attrEscape.SetBackgroundColour(ColorScheme::Get(Color::SyntaxEscapeBg));
-        m_attrEscape.SetTextColour(ColorScheme::Get(Color::SyntaxEscapeFg));
+    m_attrEscape.SetBackgroundColour(ColorScheme::Get(Color::SyntaxEscapeBg));
+    m_attrEscape.SetTextColour(ColorScheme::Get(Color::SyntaxEscapeFg));
 
-        m_attrMarkup.SetTextColour(ColorScheme::Get(Color::SyntaxMarkup));
+    m_attrMarkup.SetTextColour(ColorScheme::Get(Color::SyntaxMarkup));
 
-        m_attrPlaceholder.SetTextColour(ColorScheme::Get(Color::SyntaxFormat));
-    }
+    m_attrPlaceholder.SetTextColour(ColorScheme::Get(Color::SyntaxFormat));
+  }
 
-    const AttrType& Default() const {  return m_attrDefault; }
+  const AttrType &Default() const { return m_attrDefault; }
 #endif
 
-    const AttrType& For(SyntaxHighlighter::TextKind kind) const
-    {
-        switch (kind)
-        {
-            case SyntaxHighlighter::LeadingWhitespace:  return m_attrSpace;
-            case SyntaxHighlighter::Escape:             return m_attrEscape;
-            case SyntaxHighlighter::Markup:             return m_attrMarkup;
-            case SyntaxHighlighter::Placeholder:        return m_attrPlaceholder;
-        }
-        return m_attrSpace; // silence bogus warning
+  const AttrType &For(SyntaxHighlighter::TextKind kind) const {
+    switch (kind) {
+    case SyntaxHighlighter::LeadingWhitespace:
+      return m_attrSpace;
+    case SyntaxHighlighter::Escape:
+      return m_attrEscape;
+    case SyntaxHighlighter::Markup:
+      return m_attrMarkup;
+    case SyntaxHighlighter::Placeholder:
+      return m_attrPlaceholder;
     }
+    return m_attrSpace; // silence bogus warning
+  }
 };
 
-
-AnyTranslatableTextCtrl::AnyTranslatableTextCtrl(wxWindow *parent, wxWindowID winid, int style)
-   : CustomizedTextCtrl(parent, winid, style)
-{
-    ColorScheme::SetupWindowColors(this, [=]
-    {
-        m_attrs.reset(new Attributes(this));
-        HighlightText();
-    });
-
-    Bind(wxEVT_TEXT, [=](wxCommandEvent& e){
-        e.Skip();
-        HighlightText();
-    });
-
-    m_language = Language::English();
-}
-
-AnyTranslatableTextCtrl::~AnyTranslatableTextCtrl()
-{
-}
-
-void AnyTranslatableTextCtrl::SetLanguage(const Language& lang)
-{
-    m_language = lang;
-
-    wxEventBlocker block(this, wxEVT_TEXT);
-
-#ifdef __WXOSX__
-    NSTextView *text = TextView(this);
-    if (lang.IsRTL())
-    {
-        [text setBaseWritingDirection:NSWritingDirectionRightToLeft];
-        if ([NSApp userInterfaceLayoutDirection] == NSUserInterfaceLayoutDirectionLeftToRight)
-        {
-            // extra nudge to make typing behave as expected:
-            [text makeTextWritingDirectionRightToLeft:nil];
-        }
-    }
-    else
-    {
-        [text setBaseWritingDirection:NSWritingDirectionLeftToRight];
-    }
-#endif
-
-#ifdef __WXMSW__
-    BIDIOPTIONS bidi;
-    ::ZeroMemory(&bidi, sizeof(bidi));
-    bidi.cbSize = sizeof(bidi);
-    bidi.wMask = BOM_UNICODEBIDI;
-    bidi.wEffects = lang.IsRTL() ? BOE_UNICODEBIDI : 0;
-    ::SendMessage((HWND)GetHWND(), EM_SETBIDIOPTIONS, 0, (LPARAM) &bidi);
-
-    ::SendMessage((HWND)GetHWND(), EM_SETEDITSTYLE, lang.IsRTL() ? SES_BIDI : 0, SES_BIDI);
-
-    CHARFORMAT2 cf;
-    ::ZeroMemory(&cf, sizeof(cf));
-    cf.cbSize = sizeof(cf);
-    cf.dwMask = CFM_LCID;
-    cf.lcid = LocaleNameToLCID(str::to_wstring(m_language.LanguageTag()).c_str(), 0);
-    if (cf.lcid == 0)
-        cf.lcid = LOCALE_USER_DEFAULT;
-    ::SendMessage((HWND)GetHWND(), EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
-
-    UpdateRTLStyle();
-#endif
-}
-
-
-void AnyTranslatableTextCtrl::SetPlainText(const wxString& s)
-{
-    SetValue(EscapePlainText(s));
-}
-
-wxString AnyTranslatableTextCtrl::GetPlainText() const
-{
-    return UnescapePlainText(bidi::strip_pointless_control_chars(GetValue(), m_language.Direction()));
-}
-
-
-wxString AnyTranslatableTextCtrl::EscapePlainText(const wxString& s)
-{
-    // Note: the escapes used here should match with
-    //       BasicSyntaxHighlighter::Highlight() ones
-    wxString s2;
-    s2.reserve(s.length());
-    for (auto i = s.begin(); i != s.end(); ++i)
-    {
-        wchar_t c = *i;
-        switch (c)
-        {
-            case '\0':
-                s2 += "\\0";
-                break;
-            case '\a':
-                s2 += "\\a";
-                break;
-            case '\b':
-                s2 += "\\b";
-                break;
-            case '\f':
-                s2 += "\\f";
-                break;
-            case '\n':
-                s2 += "\\n\n";
-                break;
-            case '\r':
-                s2 += "\\r";
-                break;
-            case '\t':
-                s2 += "\\t";
-                break;
-            case '\v':
-                s2 += "\\v";
-                break;
-            case '\\':
-            {
-                s2 += c;
-                auto peek = i + 1;
-                if ( peek != s.end() )
-                {
-                    switch ((wchar_t)*peek)
-                    {
-                        case '0': case '\0':
-                        case 'a': case '\a':
-                        case 'b': case '\b':
-                        case 'f': case '\f':
-                        case 'n': case '\n':
-                        case 'r': case '\r':
-                        case 't': case '\t':
-                        case 'v': case '\v':
-                        case '\\':
-                            s2 += c; // escape problematic backslash
-                            break;
-                    }
-                }
-                break;
-            }
-            default:
-                s2 += c;
-                break;
-        }
-    }
-    return s2;
-}
-
-wxString AnyTranslatableTextCtrl::UnescapePlainText(const wxString& s)
-{
-    wxString s2;
-    s2.reserve(s.length());
-    for (auto i = s.begin(); i != s.end(); ++i)
-    {
-        wchar_t c0 = *i;
-        if (c0 == '\\')
-        {
-            if ( ++i == s.end() )
-            {
-                s2 += '\\';
-                return s2;
-            }
-            wchar_t c = *i;
-            switch (c)
-            {
-                case '0':
-                    s2 += '\0';
-                    break;
-                case 'a':
-                    s2 += '\a';
-                    break;
-                case 'b':
-                    s2 += '\b';
-                    break;
-                case 'f':
-                    s2 += '\f';
-                    break;
-                case 'n':
-                {
-                    s2 += '\n';
-                    auto peek = i + 1;
-                    if ( peek != s.end() && *peek == '\n' )
-                    {
-                        // "\\n\n" should be treated as single newline
-                        i = peek;
-                    }
-                    break;
-                }
-                case 'r':
-                    s2 += '\r';
-                    break;
-                case 't':
-                    s2 += '\t';
-                    break;
-                case 'v':
-                    s2 += '\v';
-                    break;
-                case '\\':
-                    s2 += '\\';
-                    break;
-                default:
-                    s2 += '\\';
-                    s2 += c;
-                    break;
-            }
-        }
-        else
-        {
-            s2 += c0;
-        }
-    }
-    return s2;
-}
-
-wxString AnyTranslatableTextCtrl::DoCopyText(long from, long to)
-{
-    return UnescapePlainText(GetRange(from, to));
-}
-
-void AnyTranslatableTextCtrl::DoPasteText(long from, long to, const wxString& s)
-{
-#ifdef __WXOSX__
-    DisableAutomaticSubstitutions disableAuto(this);
-#endif
-
-    Replace(from, to, EscapePlainText(bidi::strip_pointless_control_chars(s, m_language.Direction())));
-}
-
-void AnyTranslatableTextCtrl::DoSetValue(const wxString& value, int flags)
-{
-#ifdef __WXMSW__
-    wxWindowUpdateLocker dis(this);
-#endif
-    CustomizedTextCtrl::DoSetValue(value, flags);
-#ifdef __WXMSW__
-    UpdateRTLStyle();
-#endif
+AnyTranslatableTextCtrl::AnyTranslatableTextCtrl(wxWindow *parent,
+                                                 wxWindowID winid, int style)
+    : CustomizedTextCtrl(parent, winid, style) {
+  ColorScheme::SetupWindowColors(this, [=] {
+    m_attrs.reset(new Attributes(this));
     HighlightText();
+  });
+
+  Bind(wxEVT_TEXT, [=](wxCommandEvent &e) {
+    e.Skip();
+    HighlightText();
+  });
+
+  m_language = Language::English();
+}
+
+AnyTranslatableTextCtrl::~AnyTranslatableTextCtrl() {}
+
+void AnyTranslatableTextCtrl::SetLanguage(const Language &lang) {
+  m_language = lang;
+
+  wxEventBlocker block(this, wxEVT_TEXT);
+
+#ifdef __WXOSX__
+  NSTextView *text = TextView(this);
+  if (lang.IsRTL()) {
+    [text setBaseWritingDirection:NSWritingDirectionRightToLeft];
+    if ([NSApp userInterfaceLayoutDirection] ==
+        NSUserInterfaceLayoutDirectionLeftToRight) {
+      // extra nudge to make typing behave as expected:
+      [text makeTextWritingDirectionRightToLeft:nil];
+    }
+  } else {
+    [text setBaseWritingDirection:NSWritingDirectionLeftToRight];
+  }
+#endif
+
+#ifdef __WXMSW__
+  BIDIOPTIONS bidi;
+  ::ZeroMemory(&bidi, sizeof(bidi));
+  bidi.cbSize = sizeof(bidi);
+  bidi.wMask = BOM_UNICODEBIDI;
+  bidi.wEffects = lang.IsRTL() ? BOE_UNICODEBIDI : 0;
+  ::SendMessage((HWND)GetHWND(), EM_SETBIDIOPTIONS, 0, (LPARAM)&bidi);
+
+  ::SendMessage((HWND)GetHWND(), EM_SETEDITSTYLE, lang.IsRTL() ? SES_BIDI : 0,
+                SES_BIDI);
+
+  CHARFORMAT2 cf;
+  ::ZeroMemory(&cf, sizeof(cf));
+  cf.cbSize = sizeof(cf);
+  cf.dwMask = CFM_LCID;
+  cf.lcid =
+      LocaleNameToLCID(str::to_wstring(m_language.LanguageTag()).c_str(), 0);
+  if (cf.lcid == 0)
+    cf.lcid = LOCALE_USER_DEFAULT;
+  ::SendMessage((HWND)GetHWND(), EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf);
+
+  UpdateRTLStyle();
+#endif
+#ifdef __WXGTK__
+  GtkTextDirection dir = lang.IsRTL() ? GTK_TEXT_DIR_RTL : GTK_TEXT_DIR_LTR;
+  gtk_widget_set_direction(m_widget, dir);
+  gtk_widget_set_direction(GTK_WIDGET(GetGtkTextView()), dir);
+#endif
+}
+
+void AnyTranslatableTextCtrl::SetPlainText(const wxString &s) {
+  SetValue(EscapePlainText(s));
+}
+
+wxString AnyTranslatableTextCtrl::GetPlainText() const {
+  return UnescapePlainText(
+      bidi::strip_pointless_control_chars(GetValue(), m_language.Direction()));
+}
+
+wxString AnyTranslatableTextCtrl::EscapePlainText(const wxString &s) {
+  // Note: the escapes used here should match with
+  //       BasicSyntaxHighlighter::Highlight() ones
+  wxString s2;
+  s2.reserve(s.length());
+  for (auto i = s.begin(); i != s.end(); ++i) {
+    wchar_t c = *i;
+    switch (c) {
+    case '\0':
+      s2 += "\\0";
+      break;
+    case '\a':
+      s2 += "\\a";
+      break;
+    case '\b':
+      s2 += "\\b";
+      break;
+    case '\f':
+      s2 += "\\f";
+      break;
+    case '\n':
+      s2 += "\\n\n";
+      break;
+    case '\r':
+      s2 += "\\r";
+      break;
+    case '\t':
+      s2 += "\\t";
+      break;
+    case '\v':
+      s2 += "\\v";
+      break;
+    case '\\': {
+      s2 += c;
+      auto peek = i + 1;
+      if (peek != s.end()) {
+        switch ((wchar_t)*peek) {
+        case '0':
+        case '\0':
+        case 'a':
+        case '\a':
+        case 'b':
+        case '\b':
+        case 'f':
+        case '\f':
+        case 'n':
+        case '\n':
+        case 'r':
+        case '\r':
+        case 't':
+        case '\t':
+        case 'v':
+        case '\v':
+        case '\\':
+          s2 += c; // escape problematic backslash
+          break;
+        }
+      }
+      break;
+    }
+    default:
+      s2 += c;
+      break;
+    }
+  }
+  return s2;
+}
+
+wxString AnyTranslatableTextCtrl::UnescapePlainText(const wxString &s) {
+  wxString s2;
+  s2.reserve(s.length());
+  for (auto i = s.begin(); i != s.end(); ++i) {
+    wchar_t c0 = *i;
+    if (c0 == '\\') {
+      if (++i == s.end()) {
+        s2 += '\\';
+        return s2;
+      }
+      wchar_t c = *i;
+      switch (c) {
+      case '0':
+        s2 += '\0';
+        break;
+      case 'a':
+        s2 += '\a';
+        break;
+      case 'b':
+        s2 += '\b';
+        break;
+      case 'f':
+        s2 += '\f';
+        break;
+      case 'n': {
+        s2 += '\n';
+        auto peek = i + 1;
+        if (peek != s.end() && *peek == '\n') {
+          // "\\n\n" should be treated as single newline
+          i = peek;
+        }
+        break;
+      }
+      case 'r':
+        s2 += '\r';
+        break;
+      case 't':
+        s2 += '\t';
+        break;
+      case 'v':
+        s2 += '\v';
+        break;
+      case '\\':
+        s2 += '\\';
+        break;
+      default:
+        s2 += '\\';
+        s2 += c;
+        break;
+      }
+    } else {
+      s2 += c0;
+    }
+  }
+  return s2;
+}
+
+wxString AnyTranslatableTextCtrl::DoCopyText(long from, long to) {
+  return UnescapePlainText(GetRange(from, to));
+}
+
+void AnyTranslatableTextCtrl::DoPasteText(long from, long to,
+                                          const wxString &s) {
+#ifdef __WXOSX__
+  DisableAutomaticSubstitutions disableAuto(this);
+#endif
+
+  Replace(from, to,
+          EscapePlainText(
+              bidi::strip_pointless_control_chars(s, m_language.Direction())));
+}
+
+void AnyTranslatableTextCtrl::DoSetValue(const wxString &value, int flags) {
+#ifdef __WXMSW__
+  wxWindowUpdateLocker dis(this);
+#endif
+  CustomizedTextCtrl::DoSetValue(value, flags);
+#ifdef __WXMSW__
+  UpdateRTLStyle();
+#endif
+  HighlightText();
 }
 
 #ifdef __WXMSW__
-void AnyTranslatableTextCtrl::UpdateRTLStyle()
-{
-    wxEventBlocker block(this, wxEVT_TEXT);
-    UndoSuppressor blockUndo(this);
+void AnyTranslatableTextCtrl::UpdateRTLStyle() {
+  wxEventBlocker block(this, wxEVT_TEXT);
+  UndoSuppressor blockUndo(this);
 
-    PARAFORMAT2 pf;
-    ::ZeroMemory(&pf, sizeof(pf));
-    pf.cbSize = sizeof(pf);
-    pf.dwMask |= PFM_RTLPARA;
-    if (m_language.IsRTL())
-        pf.wEffects |= PFE_RTLPARA;
+  PARAFORMAT2 pf;
+  ::ZeroMemory(&pf, sizeof(pf));
+  pf.cbSize = sizeof(pf);
+  pf.dwMask |= PFM_RTLPARA;
+  if (m_language.IsRTL())
+    pf.wEffects |= PFE_RTLPARA;
 
-    long start, end;
-    GetSelection(&start, &end);
-    SetSelection(-1, -1);
-    ::SendMessage((HWND) GetHWND(), EM_SETPARAFORMAT, 0, (LPARAM) &pf);
-    SetSelection(start, end);
+  long start, end;
+  GetSelection(&start, &end);
+  SetSelection(-1, -1);
+  ::SendMessage((HWND)GetHWND(), EM_SETPARAFORMAT, 0, (LPARAM)&pf);
+  SetSelection(start, end);
 }
 #endif // !__WXMSW__
 
-void AnyTranslatableTextCtrl::HighlightText()
-{
+void AnyTranslatableTextCtrl::HighlightText() {
 #ifdef __WXOSX__
-    // See the comment in DoGetValueForRange() for why GetValue() returns subtly
-    // different thing in RTL.
-    // For highlighting, where we index into the string, we need to operate on the
-    // exact same string addTemporaryAttributes:forCharacterRange: is expecting.
-    auto traw = [TextView(this) string];
-    auto text = str::to_wstring(traw);
-    if (text.length() != [traw length] )
-    {
-        // Internally, NSString uses UTF-16 and all indexes including via NSLayoutManager
-        // are in it. std::wstring is 32bit and uses UCS4/UTF-32, so simply using wstring
-        // with syntax highlighter would break on any string with characters outside of BMP
-        // (e.g. Emoji, see https://github.com/vslavik/poedit/issues/731).
-        //
-        // To fix this, we need to guarantee same indices in NSString/UTF-16 and wstring,
-        // and a simple way to do it is to put UTF-16 data into wstring. That of course yields
-        // incorrectly encoded string, but that doesn't matter ofr the purpose of syntax
-        // highlighting, which is safely within BMP.
-        //
-        // Only do this in the rare non-BMP case for efficiency.
-        std::u16string utf16 = boost::locale::conv::utf_to_utf<char16_t>([traw UTF8String]);
-        text = std::wstring(utf16.begin(), utf16.end());
-    }
+  // See the comment in DoGetValueForRange() for why GetValue() returns subtly
+  // different thing in RTL.
+  // For highlighting, where we index into the string, we need to operate on the
+  // exact same string addTemporaryAttributes:forCharacterRange: is expecting.
+  auto traw = [TextView(this) string];
+  auto text = str::to_wstring(traw);
+  if (text.length() != [traw length]) {
+    // Internally, NSString uses UTF-16 and all indexes including via
+    // NSLayoutManager are in it. std::wstring is 32bit and uses UCS4/UTF-32, so
+    // simply using wstring with syntax highlighter would break on any string
+    // with characters outside of BMP (e.g. Emoji, see
+    // https://github.com/vslavik/poedit/issues/731).
+    //
+    // To fix this, we need to guarantee same indices in NSString/UTF-16 and
+    // wstring, and a simple way to do it is to put UTF-16 data into wstring.
+    // That of course yields incorrectly encoded string, but that doesn't matter
+    // ofr the purpose of syntax highlighting, which is safely within BMP.
+    //
+    // Only do this in the rare non-BMP case for efficiency.
+    std::u16string utf16 =
+        boost::locale::conv::utf_to_utf<char16_t>([traw UTF8String]);
+    text = std::wstring(utf16.begin(), utf16.end());
+  }
 
-    NSRange fullRange = NSMakeRange(0, text.length());
-    NSLayoutManager *layout = [TextView(this) layoutManager];
-    [layout removeTemporaryAttribute:NSForegroundColorAttributeName forCharacterRange:fullRange];
-    [layout removeTemporaryAttribute:NSBackgroundColorAttributeName forCharacterRange:fullRange];
+  NSRange fullRange = NSMakeRange(0, text.length());
+  NSLayoutManager *layout = [TextView(this) layoutManager];
+  [layout removeTemporaryAttribute:NSForegroundColorAttributeName
+                 forCharacterRange:fullRange];
+  [layout removeTemporaryAttribute:NSBackgroundColorAttributeName
+                 forCharacterRange:fullRange];
 
-    if (m_syntax)
-    {
-        m_syntax->Highlight(text, [=](int a, int b, SyntaxHighlighter::TextKind kind){
-            [layout addTemporaryAttributes:m_attrs->For(kind) forCharacterRange:NSMakeRange(a, b-a)];
-        });
-    }
+  if (m_syntax) {
+    m_syntax->Highlight(text,
+                        [=](int a, int b, SyntaxHighlighter::TextKind kind) {
+                          [layout addTemporaryAttributes:m_attrs->For(kind)
+                                       forCharacterRange:NSMakeRange(a, b - a)];
+                        });
+  }
 
 #else // !__WXOSX__
 
-    auto text = GetValue().ToStdWstring();
+  auto text = GetValue().ToStdWstring();
 
-    wxEventBlocker block(this, wxEVT_TEXT);
+  wxEventBlocker block(this, wxEVT_TEXT);
 
-    auto deflt = m_attrs->Default();
-    deflt.SetFont(GetFont());
+  auto deflt = m_attrs->Default();
+  deflt.SetFont(GetFont());
 
-  #ifdef __WXMSW__
-    UndoSuppressor blockUndo(this);
+#ifdef __WXMSW__
+  UndoSuppressor blockUndo(this);
 
-    auto doc = TextDocument(this);
-    if (IsEditable() && doc)
-    {
-        // If possible, use TOM interface to apply temporary styles, which is much
-        // more efficient. Unfortunately, it's not possible to do with read-only controls.
-        SetTOMTmpStyle(doc, 0, text.length(), deflt);
+  auto doc = TextDocument(this);
+  if (IsEditable() && doc) {
+    // If possible, use TOM interface to apply temporary styles, which is much
+    // more efficient. Unfortunately, it's not possible to do with read-only
+    // controls.
+    SetTOMTmpStyle(doc, 0, text.length(), deflt);
 
-        if (m_syntax)
-        {
-            m_syntax->Highlight(text, [=](int a, int b, SyntaxHighlighter::TextKind kind){
-                SetTOMTmpStyle(doc, a, b, m_attrs->For(kind));
-            });
-        }
+    if (m_syntax) {
+      m_syntax->Highlight(text,
+                          [=](int a, int b, SyntaxHighlighter::TextKind kind) {
+                            SetTOMTmpStyle(doc, a, b, m_attrs->For(kind));
+                          });
     }
-    else
-  #endif // __WXMSW___
-    {
-        SetStyle(0, text.length(), deflt);
+  } else
+#endif // __WXMSW___
+  {
+    SetStyle(0, text.length(), deflt);
 
-        if (m_syntax)
-        {
-            m_syntax->Highlight(text, [=](int a, int b, SyntaxHighlighter::TextKind kind){
-                SetStyle(a, b, m_attrs->For(kind));
-            });
-        }
+    if (m_syntax) {
+      m_syntax->Highlight(text,
+                          [=](int a, int b, SyntaxHighlighter::TextKind kind) {
+                            SetStyle(a, b, m_attrs->For(kind));
+                          });
     }
+  }
 #endif // __WXOSX__/!__WXOSX__
 }
 
-
-
 SourceTextCtrl::SourceTextCtrl(wxWindow *parent, wxWindowID winid)
-    : AnyTranslatableTextCtrl(parent, winid, wxTE_READONLY | wxNO_BORDER)
-{
-    SetLanguage(Language::English());
+    : AnyTranslatableTextCtrl(parent, winid, wxTE_READONLY | wxNO_BORDER) {
+  SetLanguage(Language::English());
 }
-
 
 TranslationTextCtrl::TranslationTextCtrl(wxWindow *parent, wxWindowID winid)
     : AnyTranslatableTextCtrl(parent, winid, wxNO_BORDER),
-      m_lastKeyWasReturn(false)
-{
+      m_lastKeyWasReturn(false) {
 #ifdef __WXMSW__
-    PrepareTextCtrlForSpellchecker(this);
+  PrepareTextCtrlForSpellchecker(this);
 #endif
 
 #ifdef __WXOSX__
-    [TextView(this) setAllowsUndo:YES];
+  [TextView(this) setAllowsUndo:YES];
 #endif
 
-    Bind(wxEVT_KEY_DOWN, &TranslationTextCtrl::OnKeyDown, this);
-    Bind(wxEVT_TEXT, &TranslationTextCtrl::OnText, this);
+  Bind(wxEVT_KEY_DOWN, &TranslationTextCtrl::OnKeyDown, this);
+  Bind(wxEVT_TEXT, &TranslationTextCtrl::OnText, this);
 }
 
-void TranslationTextCtrl::OnKeyDown(wxKeyEvent& e)
-{
-    m_lastKeyWasReturn = (e.GetUnicodeKey() == WXK_RETURN);
-    e.Skip();
+void TranslationTextCtrl::OnKeyDown(wxKeyEvent &e) {
+  m_lastKeyWasReturn = (e.GetUnicodeKey() == WXK_RETURN);
+  e.Skip();
 }
 
-void TranslationTextCtrl::OnText(wxCommandEvent& e)
-{
-    if (m_lastKeyWasReturn)
-    {
-        // Insert \n markup in front of newlines:
-        m_lastKeyWasReturn = false;
-        long pos = GetInsertionPoint();
-        auto range = GetRange(std::max(0l, pos - 3), pos);
-        if (range.empty() || (range.Last() == '\n' && range != "\\n\n"))
-        {
-          #ifdef __WXGTK__
-            // GTK+ doesn't like modifying the content in the "changed" signal:
-            CallAfter([=]{
-                Replace(pos - 1, pos, "\\n\n");
-                HighlightText();
-            });
-          #else
-            Replace(pos - 1, pos, "\\n\n");
-          #endif
-        }
+void TranslationTextCtrl::OnText(wxCommandEvent &e) {
+  if (m_lastKeyWasReturn) {
+    // Insert \n markup in front of newlines:
+    m_lastKeyWasReturn = false;
+    long pos = GetInsertionPoint();
+    auto range = GetRange(std::max(0l, pos - 3), pos);
+    if (range.empty() || (range.Last() == '\n' && range != "\\n\n")) {
+#ifdef __WXGTK__
+      // GTK+ doesn't like modifying the content in the "changed" signal:
+      CallAfter([=] {
+        Replace(pos - 1, pos, "\\n\n");
+        HighlightText();
+      });
+#else
+      Replace(pos - 1, pos, "\\n\n");
+#endif
     }
+  }
 
-    e.Skip();
+  e.Skip();
 }
 
 #ifdef __WXOSX__
-void TranslationTextCtrl::DoSetValue(const wxString& value, int flags)
-{
-    AnyTranslatableTextCtrl::DoSetValue(value, flags);
+void TranslationTextCtrl::DoSetValue(const wxString &value, int flags) {
+  AnyTranslatableTextCtrl::DoSetValue(value, flags);
 
-    NSUndoManager *undo = [TextView(this) undoManager];
-    [undo removeAllActions];
+  NSUndoManager *undo = [TextView(this) undoManager];
+  [undo removeAllActions];
 }
 #endif
 
 #ifdef __WXMSW__
-void TranslationTextCtrl::DoEnable(bool enable)
-{
-    wxEventBlocker block(this, wxEVT_TEXT);
-    AnyTranslatableTextCtrl::DoEnable(enable);
+void TranslationTextCtrl::DoEnable(bool enable) {
+  wxEventBlocker block(this, wxEVT_TEXT);
+  AnyTranslatableTextCtrl::DoEnable(enable);
 }
 #endif
 
-void TranslationTextCtrl::SetPlainTextUserWritten(const wxString& value)
-{
-    UndoGroup undo(this);
+void TranslationTextCtrl::SetPlainTextUserWritten(const wxString &value) {
+  UndoGroup undo(this);
 
 #ifdef __WXOSX__
-    DisableAutomaticSubstitutions disableAuto(this);
+  DisableAutomaticSubstitutions disableAuto(this);
 #endif
 
-    SelectAll();
-    WriteText(EscapePlainText(value));
-    SetInsertionPointEnd();
+  SelectAll();
+  WriteText(EscapePlainText(value));
+  SetInsertionPointEnd();
 
-    HighlightText();
+  HighlightText();
 }

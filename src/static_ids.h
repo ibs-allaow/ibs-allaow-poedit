@@ -70,9 +70,13 @@ enum ID
     // (shown in sidebar, may be hidden, is static control with the text):
     NotesForTranslator                           = 10104,
 
+
     // Text of translator's comment for current item
     // (shown in sidebar, may be hidden, is static control with the text):
     TranslatorComment                            = 10105,
+
+    // Command to copy all scripts (source + translation) to clipboard
+    CopyAllScripts                               = 10106,
 
 	// ...enter new IDs here...
 
